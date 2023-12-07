@@ -7,6 +7,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.lang.System;
+import java.util.Map;
 
 import static java.lang.System.nanoTime;
 
@@ -25,14 +26,14 @@ import static java.lang.System.nanoTime;
 public class CacheInvocationHandler<T> implements InvocationHandler {
     private T cachedObject;
     private boolean cachedObjectChanged;
-    private final HashMap<Method, HashMap<String, TimedValue>> lastValues;
-    private final HashMap<Method, Method> methodMap;
+    private final CacheStorage lastValues;
+    private final Map<Method, Method> methodMap;
 
     private static CacheCleaner cacheCleaner;
 
     public CacheInvocationHandler() {
         methodMap = new HashMap<>();
-        lastValues = new HashMap<>();
+        lastValues = new CacheStorage();
         if (cacheCleaner == null) cacheCleaner = new CacheCleaner();
     }
 
@@ -52,19 +53,21 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
         if (objectMethod != null) {
             if (objectMethod.isAnnotationPresent(Cache.class)) {
                 System.out.println(objectMethod.getAnnotation(Cache.class).value());
+                Object lastValue;
                 // если объект не менялся, пытаемся достать значение из кэша
                 if (!cachedObjectChanged) {
-                    String objectState = cachedObject.toString();
-                    if (lastValues.containsKey(method) && lastValues.get(method).containsKey(objectState)) {
+                    try {
+                        lastValue = lastValues.getCachedValue(method, cachedObject.toString());
                         System.out.println("Cached object not changed, skip method " + method.getName() + " call!");
-                        return getLastValue(method, objectState);
-                    }
+                        return lastValue;
+                    } catch (IllegalArgumentException e) {}
                 }
                 // в противном случае вызываем исходный метод и кешируем результат
                 cachedObjectChanged = false;
-                Object lastValue = method.invoke(cachedObject, args);
-                saveValue(method, cachedObject.toString(), lastValue);
+                lastValue = method.invoke(cachedObject, args);
+                lastValues.saveValue(method, cachedObject.toString(), lastValue);
                 return lastValue;
+
             } else if (objectMethod.isAnnotationPresent(Setter.class)) {
                 System.out.println("Object state start to change!");
                 cachedObjectChanged = true;
@@ -74,13 +77,6 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
             return objectMethod.invoke(cachedObject, args);
         }
         return  null;
-    }
-
-    private void saveValue(Method method, String objectState, Object value) {
-        if (!lastValues.containsKey(method)) {
-            lastValues.put(method, new HashMap<>());
-        }
-        lastValues.get(method).put(objectState, new TimedValue(value));
     }
 
     /**
@@ -100,23 +96,6 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
             objectMethod = methodMap.get(method);
         }
         return objectMethod;
-    }
-
-    private Object getLastValue(Method method, String objectState) {
-        TimedValue timedValue = lastValues.get(method).get(objectState);
-        timedValue.setTime(nanoTime());
-        return timedValue.getValue();
-    }
-}
-
-class TimedValue {
-    @Getter @lombok.Setter
-    long time;
-    @Getter @lombok.Setter
-    Object value;
-    public TimedValue(Object value) {
-        this.time = nanoTime();
-        this.value = value;
     }
 }
 
