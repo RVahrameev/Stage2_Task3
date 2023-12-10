@@ -31,6 +31,7 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
         methodMap = new HashMap<>();
         lastValues = new CacheStorage();
         if (cacheCleaner == null) cacheCleaner = new CacheCleaner();
+        cacheCleaner.addCacheStorage(lastValues);
     }
 
     public T cache(T object) {
