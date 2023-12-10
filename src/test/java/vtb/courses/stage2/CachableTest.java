@@ -20,7 +20,7 @@ public class CachableTest {
         }
 
         @Override
-        @Setter
+        @Mutator
         public void setterMethod(Object object){
             sourceData = (Integer)object;
         }

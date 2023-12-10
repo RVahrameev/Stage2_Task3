@@ -1,15 +1,11 @@
 package vtb.courses.stage2;
 
-import lombok.Getter;
-
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.lang.System;
 import java.util.Map;
-
-import static java.lang.System.nanoTime;
 
 /**
  *  Класс <b>CacheInvocationHandler</b> перехватывает вызовы методов интерфейса T прокси-объекта
@@ -27,7 +23,7 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
     private T cachedObject;
     private boolean cachedObjectChanged;
     private final CacheStorage lastValues;
-    private final Map<Method, Method> methodMap;
+    private final Map<Method, CachedObjectMethod> methodMap;
 
     private static CacheCleaner cacheCleaner;
 
@@ -49,10 +45,9 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
     }
 
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        Method objectMethod = getCachedObjectMethod(method);
+        CachedObjectMethod objectMethod = getCachedObjectMethod(method);
         if (objectMethod != null) {
-            if (objectMethod.isAnnotationPresent(Cache.class)) {
-                System.out.println(objectMethod.getAnnotation(Cache.class).value());
+            if (objectMethod.isCached) {
                 Object lastValue;
                 // если объект не менялся, пытаемся достать значение из кэша
                 if (!cachedObjectChanged) {
@@ -65,16 +60,16 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
                 // в противном случае вызываем исходный метод и кешируем результат
                 cachedObjectChanged = false;
                 lastValue = method.invoke(cachedObject, args);
-                lastValues.saveValue(method, cachedObject.toString(), lastValue);
+                lastValues.saveValue(method, cachedObject.toString(), lastValue, objectMethod.cacheTTL);
                 return lastValue;
 
-            } else if (objectMethod.isAnnotationPresent(Setter.class)) {
+            } else if (objectMethod.isMutator) {
                 System.out.println("Object state start to change!");
                 cachedObjectChanged = true;
             }
             // Если дошли до этой точки, то просто вызываем на проксируемом объекте перехваченный метод
             System.out.println("Call native object method " + method.getName());
-            return objectMethod.invoke(cachedObject, args);
+            return objectMethod.method.invoke(cachedObject, args);
         }
         return  null;
     }
@@ -83,13 +78,13 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
     * getCachedObjectMethod - по методу method прокси объекта,
     * возвращает соответствующий ему метод проксируемого объекта
      * */
-    private Method getCachedObjectMethod(Method method) {
-        Method objectMethod = null;
+    private CachedObjectMethod getCachedObjectMethod(Method method) {
+        CachedObjectMethod objectMethod = null;
         // Чтобы каждый раз не заниматься сложными поисками соответствующего метода в проксируемом объекте
         // строим мапу методов прокси и проксируемого
         if (!methodMap.containsKey(method)) {
             try {
-                objectMethod = cachedObject.getClass().getMethod(method.getName(), method.getParameterTypes());
+                objectMethod = new CachedObjectMethod(cachedObject.getClass().getMethod(method.getName(), method.getParameterTypes()));
             } catch (NoSuchMethodException e) {}
             methodMap.put(method, objectMethod);
         } else {
@@ -99,3 +94,18 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
     }
 }
 
+class CachedObjectMethod {
+    Method method;
+    long cacheTTL;
+    boolean isCached;
+    boolean isMutator;
+
+    public CachedObjectMethod(Method method) {
+        this.method = method;
+        this.isCached = method.isAnnotationPresent(Cache.class);
+        this.isMutator = method.isAnnotationPresent(Mutator.class);
+        if (this.isCached) {
+            cacheTTL = method.getAnnotation(Cache.class).value();
+        }
+    }
+}
