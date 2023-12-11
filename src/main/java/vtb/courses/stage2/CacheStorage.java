@@ -20,6 +20,7 @@ public class CacheStorage {
     }
 
     public void saveValue(Method method, String objectState, Object value, long ttl) {
+        System.out.println("saveValue " + objectState + " - " + value + " - " + ttl);
         Map<String, TimedValue> stateMap;
         stateMap = methodValues.get(method);
         if (stateMap == null){
@@ -51,26 +52,28 @@ public class CacheStorage {
         for (Method method: methodValues.keySet()) {
             for (String state: (stateMap = methodValues.get(method)).keySet()) {
                 TimedValue timedValue = stateMap.get(state);
-                if (nanoTime() - timedValue.getTime() > timedValue.ttl) {
+                if (timedValue.getTtl() != 0 && (nanoTime() - timedValue.getTime() > 1000000L * timedValue.getTtl())) {
                     stateMap.remove(state);
                 }
             }
         }
     }
-}
 
-
-class TimedValue {
-    @Getter @Setter
-    private long time;
-    @Getter @Setter
-    private Object value;
-    long ttl;
-    boolean toDelete;
-    public TimedValue(Object value, long ttl) {
-        this.time = nanoTime();
-        this.value = value;
-        this.ttl = ttl;
-        this.toDelete = false;
+    class TimedValue {
+        @Getter @Setter
+        private long time;
+        @Getter
+        private final Object value;
+        @Getter
+        private final long ttl;
+        boolean toDelete;
+        public TimedValue(Object value, long ttl) {
+            this.time = nanoTime();
+            this.value = value;
+            this.ttl = ttl;
+            this.toDelete = false;
+        }
     }
 }
+
+

@@ -6,9 +6,11 @@ import java.util.Set;
 import static java.lang.System.nanoTime;
 
 public class CacheCleaner extends Thread {
-    private Set<CacheStorageItem> cacheStorages;
-    // здесь будем расчитывать период запуска очистки
+    private final Set<CacheStorageItem> cacheStorages;
+
+    // здесь будем расчитывать минимальный период запуска цикла очистки
     private long minTtl = Long.MAX_VALUE;
+
     public CacheCleaner() {
         cacheStorages = new HashSet<>();
         this.start();
@@ -20,19 +22,26 @@ public class CacheCleaner extends Thread {
     }
 
     private void clearCache(CacheStorageItem cacheStorageItem) {
-        if (nanoTime() - cacheStorageItem.lastProcessed > cacheStorageItem.cacheStorage.getMinTtl()) {
+        minTtl = Long.min(minTtl, cacheStorageItem.cacheStorage.getMinTtl());
+        if (nanoTime() - cacheStorageItem.lastProcessed > 1000000L * cacheStorageItem.cacheStorage.getMinTtl()) {
             cacheStorageItem.cacheStorage.clearTimeoutedValues();
+            cacheStorageItem.lastProcessed = nanoTime();
         }
     }
+
     @Override
     public void run() {
         while (true) {
-            cacheStorages.iterator().forEachRemaining(x -> clearCache(x));
+            // запускаем процесс очистки кеша
+            cacheStorages.iterator().forEachRemaining(this::clearCache);
+            System.out.println("Thread sleep " + minTtl);
+            // спим до начала следующей итерации
             try {
                 if (minTtl == Long.MAX_VALUE) {
                     Thread.sleep(1000);
+                } else {
+                    Thread.sleep(minTtl);
                 }
-                Thread.sleep(minTtl);
             } catch (InterruptedException e) {
                 break;
             }
@@ -40,8 +49,8 @@ public class CacheCleaner extends Thread {
     }
 
     class CacheStorageItem {
-        CacheStorage cacheStorage;
-        long lastProcessed;
+        private final CacheStorage cacheStorage;
+        private long lastProcessed;
 
         public CacheStorageItem(CacheStorage cacheStorage) {
             this.cacheStorage = cacheStorage;

@@ -30,7 +30,9 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
     public CacheInvocationHandler() {
         methodMap = new HashMap<>();
         lastValues = new CacheStorage();
-        if (cacheCleaner == null) cacheCleaner = new CacheCleaner();
+        if (cacheCleaner == null) {
+            cacheCleaner = new CacheCleaner();
+        }
         cacheCleaner.addCacheStorage(lastValues);
     }
 
@@ -54,7 +56,7 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
                 if (!cachedObjectChanged) {
                     try {
                         lastValue = lastValues.getCachedValue(method, cachedObject.toString());
-                        System.out.println("Cached object not changed, skip method " + method.getName() + " call!");
+                        System.out.println("    Cached object not changed, skip method " + method.getName() + " call!");
                         return lastValue;
                     } catch (IllegalArgumentException e) {}
                 }
@@ -65,11 +67,11 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
                 return lastValue;
 
             } else if (objectMethod.isMutator) {
-                System.out.println("Object state start to change!");
+                System.out.println("    Object state start to change!");
                 cachedObjectChanged = true;
             }
             // Если дошли до этой точки, то просто вызываем на проксируемом объекте перехваченный метод
-            System.out.println("Call native object method " + method.getName());
+            System.out.println("    Call native object method " + method.getName());
             return objectMethod.method.invoke(cachedObject, args);
         }
         return  null;
@@ -93,20 +95,23 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
         }
         return objectMethod;
     }
-}
 
-class CachedObjectMethod {
-    Method method;
-    long cacheTTL;
-    boolean isCached;
-    boolean isMutator;
+    class CachedObjectMethod {
+        private final Method method;
+        private final long cacheTTL;
+        private final boolean isCached;
+        private final boolean isMutator;
 
-    public CachedObjectMethod(Method method) {
-        this.method = method;
-        this.isCached = method.isAnnotationPresent(Cache.class);
-        this.isMutator = method.isAnnotationPresent(Mutator.class);
-        if (this.isCached) {
-            cacheTTL = method.getAnnotation(Cache.class).value();
+        public CachedObjectMethod(Method method) {
+            this.method = method;
+            this.isCached = method.isAnnotationPresent(Cache.class);
+            this.isMutator = method.isAnnotationPresent(Mutator.class);
+            if (this.isCached) {
+                cacheTTL = method.getAnnotation(Cache.class).value();
+            } else {
+                cacheTTL = 0;
+            }
         }
     }
 }
+
