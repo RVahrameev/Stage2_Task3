@@ -4,7 +4,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import static java.lang.System.nanoTime;
+import java.lang.reflect.Field;
+import java.util.Map;
 
 public class CachableTest {
 
@@ -59,7 +60,7 @@ public class CachableTest {
         Assertions.assertEquals(100, proxyObject.cachableMethod(), "Вызов cachableMethod 1 вернул не верное значение");
 
         System.out.println("Проверяем что кешируемый метод был вызван");
-        Assertions.assertEquals(true, cachableObject.cachableWasRunning, "Вызов cachableMethod 1 не был произведён");
+        Assertions.assertTrue(cachableObject.cachableWasRunning, "Вызов cachableMethod 1 не был произведён");
 
         System.out.println("Вызываем не кэшируемый метод, он должен отработать и поместить в sourceData - 5");
         Assertions.assertDoesNotThrow(() -> proxyObject.simpleMethod(), "Не удалось на прокси объекта вызвать не аннотированный метод simpleMethod");
@@ -122,5 +123,64 @@ public class CachableTest {
 
         System.out.println("Проверяем что кешируемый метод НЕ был вызван");
         Assertions.assertFalse(cachableObject.cachableWasRunning, "Был совершен вызов cachableMethod 5. Кеш не сработал!");
+    }
+
+    @Test
+    @DisplayName("Объёмное тестирование массового создания и удаления")
+    public void test2() {
+        System.out.println("Создаём объект, который будем кешировать. Т.е. создавать для него прокси");
+        CachableClass cachableObject = new CachableClass();
+
+        System.out.println("Сначала создаём прокси объект для нашего тестового кэшируемого объекта");
+        CacheInvocationHandler<Cachable> handler = new CacheInvocationHandler<>();
+        Assertions.assertDoesNotThrow(() -> {proxyObject = handler.cache(cachableObject);}, "Не удалось создать прокси для объекта cachableObject");
+
+        // Искуственно уменьшаем время задержки удаления
+        cachableObject.sourceData = 1;
+        proxyObject.cachableMethod();
+        try {
+            Field field = handler.getClass().getDeclaredField("methodMap");
+            field.setAccessible(true);
+            Map map = (Map)field.get(handler);
+            for (Object hdl : map.values()) {
+                Field ttl = hdl.getClass().getDeclaredField("cacheTTL");
+                ttl.setAccessible(true);
+                ttl.set(hdl, 100);
+            }
+        } catch (Exception e) {Assertions.fail("Не удалось установить время жизни кешируемых методов "+e.getMessage());}
+
+        try {
+            // Массовое порождение значений в кеше
+            for (int i = 0; i <= 10000; i++) {
+                cachableObject.sourceData = i;
+                proxyObject.cachableMethod();
+                // раз в 100 записей спим
+                if ((i-1)%100 == 0)
+                    Thread.sleep(10);
+            }
+            // Массовое вычитывание значений в кеше
+            // Запускается встречным потоком к удалению элементов
+            // Так что начиная с некоторого элемента снова начнёт формироваться кеш, так как прежний не долгоживущий кеш удалён
+            // Таким образом корректность удаления кеша будет в том что начиная с некоторого момента, чтение из кеша прекратится
+            boolean cacheDeleted = false;
+            long prevRes = 100020001;
+            for (int i = 10000; i > 0; i--) {
+                cachableObject.sourceData = i;
+                cachableObject.cachableWasRunning = false;
+                long res = proxyObject.cachableMethod();
+                // Проверяем корректность полученного значения
+                Assertions.assertEquals(i+1+i, prevRes-res, "Для состояния "+i+" кешируемый метод вернул не верный ответ");
+                prevRes = res;
+                if (cachableObject.cachableWasRunning) {
+                    cacheDeleted = true;
+                }
+                // с этого момента чтение кеша должно прекратиться
+                if (cacheDeleted)
+                    Assertions.assertTrue(cachableObject.cachableWasRunning, "Не корректно сработало удаление кеша, переход с кеша на некеш должен быть одноразовый");
+                if ((i-1)%100 == 0)
+                    Thread.sleep(10);
+            }
+        }
+        catch (Exception e){}
     }
 }

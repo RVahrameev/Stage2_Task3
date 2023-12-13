@@ -23,7 +23,7 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
     private T cachedObject;
     private boolean cachedObjectChanged;
     private final CacheStorage lastValues;
-    private final Map<Method, CachedObjectMethod> methodMap;
+    private Map<Method, CachedObjectMethod> methodMap;
 
     private static CacheCleaner cacheCleaner;
 
@@ -56,7 +56,7 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
                 if (!cachedObjectChanged) {
                     try {
                         lastValue = lastValues.getCachedValue(method, cachedObject.toString());
-                        System.out.println("    Cached object not changed, skip method " + method.getName() + " call!");
+                        System.out.println("    Cached object not changed, skip method " + method.getName() + " call! Cache = "+lastValue);
                         return lastValue;
                     } catch (IllegalArgumentException e) {}
                 }
