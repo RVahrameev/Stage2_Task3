@@ -10,6 +10,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.System.nanoTime;
 
+/** Класс CacheStorage собственно реализует кеш
+ * <p>   saveValue - помещает новое значение в кеш
+ * <p>   getCachedValue - извлекает значение из кеша
+ * <p>   clearTimeoutedValues - чистит кеш. вызывается сборщиком мусора
+ */
+
 public class CacheStorage {
     private final Map<Method, Map<String, TimedValue>> methodValues;
     @Getter
@@ -19,6 +25,7 @@ public class CacheStorage {
         methodValues = new HashMap<>();
     }
 
+    // Помещает новое значение в кэш
     public void saveValue(Method method, String objectState, Object value, long ttl) {
         System.out.println("saveValue " + objectState + " - " + value + " - " + ttl);
         Map<String, TimedValue> stateMap;

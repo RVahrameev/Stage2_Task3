@@ -5,6 +5,14 @@ import java.util.Set;
 
 import static java.lang.System.nanoTime;
 
+/** Класс CacheCleaner собственно реализует поток сборки мусора
+ *  Поток автоматически запускается при создании объекта
+ *  Стратегия сборки мусора - интеравальная сборка,
+ *  т.к. нет ни каких оснований строить предположения об интенсивности использования кэша
+ *  Длина интервала определяется как минимальное время жизни объектов в очищаемых кэшах
+ *  При этом каждый из очищаемых кешей чистится не чаще чем минимальное время жизни его объектов
+ */
+
 public class CacheCleaner extends Thread {
     private final Set<CacheStorageItem> cacheStorages;
 
@@ -32,18 +40,27 @@ public class CacheCleaner extends Thread {
     @Override
     public void run() {
         while (true) {
-            // запускаем процесс очистки кеша
+            // запускаем процесс очистки кеша и фиксируем его длительность
+            long startClearing = nanoTime();
             cacheStorages.iterator().forEachRemaining(this::clearCache);
-            System.out.println("Thread sleep " + minTtl);
-            // спим до начала следующей итерации
-            try {
-                if (minTtl == Long.MAX_VALUE) {
-                    Thread.sleep(1000);
-                } else {
-                    Thread.sleep(minTtl);
+
+            // определяем сколько будем спать, с корректировкой на время затраченное на очистку
+            long timeToSleep;
+            if (minTtl == Long.MAX_VALUE) {
+                timeToSleep = 1000;
+            } else {
+                timeToSleep = minTtl;
+            }
+            timeToSleep = timeToSleep - (nanoTime() - startClearing)/1000000L;
+
+            // спим до начала следующей итерации, если осталось время
+            if (timeToSleep > 0) {
+                System.out.println("Thread sleep " + timeToSleep);
+                try {
+                    Thread.sleep(timeToSleep);
+                } catch (InterruptedException e) {
+                    break;
                 }
-            } catch (InterruptedException e) {
-                break;
             }
         }
     }

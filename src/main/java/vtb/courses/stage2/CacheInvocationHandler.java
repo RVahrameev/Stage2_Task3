@@ -12,10 +12,10 @@ import java.util.Map;
  *  Реализует логику кэширования вызовов методов помеченных аннотацией <b>@Cache</b>
  *  Делает перевызов интерфейсных методов, помеченных аннотацией <b>@Cache</b>, исходного объекта <b>cachableObject</b>
  *  только в том случае, если состояние объекта было изменено или объект находся в исходном состоянии.
- *  Изменение объекта определяется фиксацией вызовов интерфейсных методов помеченных аннотацией <b>@Setter</b>.
+ *  Изменение объекта определяется фиксацией вызовов интерфейсных методов помеченных аннотацией <b>@Mutator</b>.
  *  Остальные интерфейсный методы перевызываются на исходном объекте без изменения логики работы.
  *  <p>
- *  Для того чтобы задать отслеживаемый объект, используется метод <b>cache()</b>
+ *  Для того чтобы начать отслеживать и кэшировать объект, используется метод <b>cache()</b>
  *  <p>
  *  Идея позаимствована тут <a href="https://javarush.com/groups/posts/2281-dinamicheskie-proksi">https://javarush.com/groups/posts/2281-dinamicheskie-proksi</a>
  */
@@ -23,7 +23,7 @@ public class CacheInvocationHandler<T> implements InvocationHandler {
     private T cachedObject;
     private boolean cachedObjectChanged;
     private final CacheStorage lastValues;
-    private Map<Method, CachedObjectMethod> methodMap;
+    private final Map<Method, CachedObjectMethod> methodMap;
 
     private static CacheCleaner cacheCleaner;
 

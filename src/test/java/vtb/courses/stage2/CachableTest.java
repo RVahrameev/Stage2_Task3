@@ -180,6 +180,7 @@ public class CachableTest {
                 if ((i-1)%100 == 0)
                     Thread.sleep(10);
             }
+            Assertions.assertTrue(cacheDeleted, "Сборщик мусора так ничего и не удалил из кэша");
         }
         catch (Exception e){}
     }
